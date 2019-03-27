@@ -1,0 +1,106 @@
+version: '3'
+
+services:
+
+    db:
+        image: mariadb
+        restart: always
+        env_file: 
+            - .env
+        volumes:
+            - ./data/db:/var/lib/mysql
+        environment:
+            MYSQL_ROOT_PASSWORD: db_root_password
+            MYSQL_PASSWORD: db_password
+            MYSQL_DATABASE: moneywaster
+            MYSQL_USER: moneywaster
+
+    backend-fpm:
+        build:
+            context: ./backend-php/
+            dockerfile: ./docker/fpm/Dockerfile
+        volumes: 
+            - ./backend-php/:/app/
+        env_file:
+            - .env
+        restart: always
+        links:
+            - db
+
+    backend-php-nginx:
+        build: ./backend-php/docker/nginx/
+        volumes: 
+            - ./backend-php/:/app/
+        env_file:
+            - .env
+        environment:
+            VIRTUAL_HOST: php.${API_WEBSITE_DOMAIN}
+            LETSENCRYPT_HOST: php.${API_WEBSITE_DOMAIN}
+            LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+        restart: always
+        links:
+            - backend-fpm
+
+    backend-js:
+        build:
+            context: ./backend-js/
+            dockerfile: ./docker/Dockerfile
+        env_file:
+            - .env
+        restart: always
+        links:
+            - db
+
+    backend-js-nginx:
+        build: ./backend-js/docker/nginx/
+        volumes: 
+            - ./backend-js/:/app/
+        env_file:
+            - .env
+        environment:
+            VIRTUAL_HOST: js.${API_WEBSITE_DOMAIN}
+            LETSENCRYPT_HOST: js.${API_WEBSITE_DOMAIN}
+            LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+        restart: always
+        links:
+            - backend-js
+          
+    frontend-nginx:
+        build:
+            context: ./frontend/
+            dockerfile: ./docker/nginx/Dockerfile
+        env_file:
+            - .env
+        environment:
+            VIRTUAL_HOST: ${WEBSITE_DOMAIN}
+            LETSENCRYPT_HOST: ${WEBSITE_DOMAIN}
+            LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL}
+        restart: always
+
+    nginx-proxy:
+        image: jwilder/nginx-proxy:alpine
+        ports:
+            - "80:80"
+            - "443:443"
+        volumes:
+            - ./nginx/vhost.d/:/etc/nginx/vhost.d
+            - ./nginx/html/:/usr/share/nginx/html
+            - ./nginx/certs/:/etc/nginx/certs
+            - /var/run/docker.sock:/tmp/docker.sock:ro
+        restart: always
+        labels:
+            com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy: "true"
+        links:
+            - backend-php-nginx
+            - frontend-nginx
+
+    letsencrypt-nginx-proxy-companion:
+        image: jrcs/letsencrypt-nginx-proxy-companion
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+            - /var/run/docker.sock:/tmp/docker.sock
+            - ./nginx/vhost.d/:/etc/nginx/vhost.d
+            - ./nginx/html/:/usr/share/nginx/html
+            - ./nginx/certs/:/etc/nginx/certs
+        links:
+            - nginx-proxy
