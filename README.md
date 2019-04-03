@@ -36,5 +36,3 @@
 ## other notes
 - the PHP and node.js backends have basically the same functionality for the end user. I've built them just for fun
 - setup is not that straightforward because of the event cache approach and I had to save the costs/revenues for each attendee in the database
-- as I'm not very proficient in css/sass I didn't focus on it
-- from my previous use of the google API, I knew that the callback URLs for oauth had to be public. Seems this is not the case anymore so the app should work fine on http://localhost as well
